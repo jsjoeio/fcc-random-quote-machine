@@ -11,15 +11,15 @@ const typeDefs = gql`
   ## These two custom directives are implemented by the
   ## onegraph-apollo-server-auth package
   directive @isAuthenticated on QUERY | FIELD_DEFINITION
-  directive @hasRole(oneOf: [String!]) on QUERY | FIELD_DEFINITION
+  directive @hasRole(oneOf: [String!]) on QUERY | OBJECT | FIELD_DEFINITION
   # This "Quote" type can be used in other type declarations.
   type Quote {
-    quote: String @isAuthenticated
-    id: ID @hasRole(oneOf: ["contributor"])
+    quote: String
+    id: ID
   }
 
   # The "Query" type is the root of all GraphQL queries.
-  type Query {
+  type Query @hasRole(oneOf: ["contributor"]){
     randomQuote: Quote
   }
 `

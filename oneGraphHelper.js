@@ -1,5 +1,5 @@
 // Peers
-const { SchemaDirectiveVisitor } = require('apollo-server')
+const { SchemaDirectiveVisitor } = require('graphql-tools')
 const {
   AuthenticationError,
   AuthorizationError
@@ -21,7 +21,41 @@ const isUuid = string => {
 }
 
 class hasRoleDirective extends SchemaDirectiveVisitor {
+  visitObject(field) {
+    // console.log(field, 'hi field')
+    const requiredRoles = this.args.oneOf
+    const resolver =
+      field.resolve ||
+      (source => {
+        const value = source[field.name]
+        return value
+      })
+    const { url } = this.args
+
+    field.resolve = (source, args, context, info) => {
+      const userRoles =
+        (context.jwt && context.jwt.user && context.jwt.user.roles) || []
+      const roleRequirementSatisfied = userRoles.some(role =>
+        requiredRoles.includes(role)
+      )
+
+      if (!roleRequirementSatisfied) {
+        throw new AuthenticationError(
+          `Roles required to access ${field.name}: oneOf=[${requiredRoles.join(
+            ', '
+          )}], roles you have=[${userRoles.join(', ')}]`
+        )
+      }
+
+      return resolver(source, args, context, info)
+    }
+
+    if (field.type instanceof GraphQLNonNull) {
+      field.type = field.type.ofType
+    }
+  }
   visitFieldDefinition(field) {
+    // console.log(field, 'hi field')
     const requiredRoles = this.args.oneOf
     const resolver =
       field.resolve ||
@@ -57,7 +91,6 @@ class hasRoleDirective extends SchemaDirectiveVisitor {
 
 class isAuthenticatedDirective extends SchemaDirectiveVisitor {
   visitFieldDefinition(field) {
-    console.log('line 60 ======>1', field)
     const resolver =
       field.resolve ||
       (source => {
@@ -118,16 +151,16 @@ const makeOneGraphJwtVerifier = (appId, options) => {
 
       const alg =
         sharedSecret &&
-        header &&
-        header.alg &&
-        ['HS256', 'HS512'].includes(header.alg)
+          header &&
+          header.alg &&
+          ['HS256', 'HS512'].includes(header.alg)
           ? 'HMAC'
           : 'RSA'
 
       if (alg === 'HMAC' && !sharedSecret) {
         reject(
           "HMAC key used when apollo-server configured to use RSA. Did you forget to include your `sharedSecret' when creating the OneGraphJWT client? JWT Header: " +
-            JSON.stringify(header)
+          JSON.stringify(header)
         )
       }
 
@@ -142,14 +175,14 @@ const makeOneGraphJwtVerifier = (appId, options) => {
         })
 
         function getKey(header, callback) {
-          client.getSigningKey(header.kid, function(err, key) {
+          client.getSigningKey(header.kid, function (err, key) {
             var signingKey = (key && key.publicKey) || (key && key.rsaPublicKey)
             if (key) {
               callback(null, signingKey)
             } else {
               reject(
                 'No publicKey or rsaPublicKey found on signingKey for JWT in header: ' +
-                  JSON.stringify(header)
+                JSON.stringify(header)
               )
             }
           })
@@ -159,7 +192,7 @@ const makeOneGraphJwtVerifier = (appId, options) => {
           jwt.verify(token, getKey, { algorithms: ['RS256'] }, cb)
       }
 
-      verifier(token, function(err, decoded) {
+      verifier(token, function (err, decoded) {
         resolve(decoded)
       })
     })
